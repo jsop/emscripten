@@ -597,7 +597,7 @@ LibraryManager.library = {
       FS.createDevice(devFolder, 'null', function(){}, function(){});
 
       // Create default streams.
-      FS.streams[1] = {
+      FS.streams[3] = {
         path: '/dev/stdin',
         object: stdin,
         position: 0,
@@ -608,7 +608,7 @@ LibraryManager.library = {
         eof: false,
         ungotten: []
       };
-      FS.streams[2] = {
+      FS.streams[4] = {
         path: '/dev/stdout',
         object: stdout,
         position: 0,
@@ -619,7 +619,7 @@ LibraryManager.library = {
         eof: false,
         ungotten: []
       };
-      FS.streams[3] = {
+      FS.streams[5] = {
         path: '/dev/stderr',
         object: stderr,
         position: 0,
@@ -630,10 +630,14 @@ LibraryManager.library = {
         eof: false,
         ungotten: []
       };
+      // Alias common numerical FDs to the stdio streams.
+      FS.streams[0] = FS.streams[3];
+      FS.streams[1] = FS.streams[4];
+      FS.streams[2] = FS.streams[5];
       // TODO: put these low in memory like we used to assert on: assert(Math.max(_stdin, _stdout, _stderr) < 15000); // make sure these are low, we flatten arrays with these
-      {{{ makeSetValue(makeGlobalUse('_stdin'), 0, 1, 'void*') }}};
-      {{{ makeSetValue(makeGlobalUse('_stdout'), 0, 2, 'void*') }}};
-      {{{ makeSetValue(makeGlobalUse('_stderr'), 0, 3, 'void*') }}};
+      {{{ makeSetValue(makeGlobalUse('_stdin'), 0, 3, 'void*') }}};
+      {{{ makeSetValue(makeGlobalUse('_stdout'), 0, 4, 'void*') }}};
+      {{{ makeSetValue(makeGlobalUse('_stderr'), 0, 5, 'void*') }}};
 
       // Other system paths
       FS.createPath('/', 'dev/shm/tmp', true, true); // temp files
@@ -642,23 +646,23 @@ LibraryManager.library = {
       for (var i = FS.streams.length; i < Math.max(_stdin, _stdout, _stderr) + {{{ QUANTUM_SIZE }}}; i++) {
         FS.streams[i] = null; // Make sure to keep FS.streams dense
       }
-      FS.streams[_stdin] = FS.streams[1];
-      FS.streams[_stdout] = FS.streams[2];
-      FS.streams[_stderr] = FS.streams[3];
+      FS.streams[_stdin] = FS.streams[3];
+      FS.streams[_stdout] = FS.streams[4];
+      FS.streams[_stderr] = FS.streams[5];
 #if ASSERTIONS
       FS.checkStreams();
       // see previous TODO on stdin etc.: assert(FS.streams.length < 1024); // at this early stage, we should not have a large set of file descriptors - just a few
 #endif
       allocate([ allocate(
-        {{{ Runtime.QUANTUM_SIZE === 4 ? '[0, 0, 0, 0, _stdin, 0, 0, 0, _stdout, 0, 0, 0, _stderr, 0, 0, 0]' : '[0, _stdin, _stdout, _stderr]' }}},
+        {{{ Runtime.QUANTUM_SIZE === 4 ? '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, _stdin, 0, 0, 0, _stdout, 0, 0, 0, _stderr, 0, 0, 0]' : '[0, 0, 0, _stdin, _stdout, _stderr]' }}},
         'void*', ALLOC_NORMAL) ], 'void*', ALLOC_NONE, {{{ makeGlobalUse('__impure_ptr') }}});
     },
 
     quit: function() {
       if (!FS.init.initialized) return;
       // Flush any partially-printed lines in stdout and stderr. Careful, they may have been closed
-      if (FS.streams[2] && FS.streams[2].object.output.buffer.length > 0) FS.streams[2].object.output({{{ charCode('\n') }}});
-      if (FS.streams[3] && FS.streams[3].object.output.buffer.length > 0) FS.streams[3].object.output({{{ charCode('\n') }}});
+      if (FS.streams[4] && FS.streams[4].object.output.buffer.length > 0) FS.streams[4].object.output({{{ charCode('\n') }}});
+      if (FS.streams[5] && FS.streams[5].object.output.buffer.length > 0) FS.streams[5].object.output({{{ charCode('\n') }}});
     },
 
     // Standardizes a path. Useful for making comparisons of pathnames work in a consistent manner.
