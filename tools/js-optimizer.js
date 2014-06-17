@@ -2507,13 +2507,21 @@ function registerizeHarder(ast) {
       var block = blocks[i];
       // Does it have any labels as preconditions to its entry?
       for (var labelVal in block.labels) {
-        // If there are multiple blocks with the same label, all bets are off.
+        // If there are multiple blocks with the same label, they must be identical.
         // This seems to happen sometimes for short blocks that end with a return.
         // TODO: it should be safe to merge the duplicates if they're identical.
-        if (labelVal in labelledBlocks) {
-          labelledBlocks = {};
-          labelledJumps = [];
-          break FINDLABELLEDBLOCKS;
+        var existingBlock = labelledBlocks[labelVal];
+        if (existingBlock) {
+          if (existingBlock.exit !== block.exit) {
+            labelledBlocks = {};
+            labelledJumps = [];
+            break FINDLABELLEDBLOCKS;
+          }
+          if (!sortedJsonCompare(existingBlock.nodes, block.nodes)) {
+            labelledBlocks = {};
+            labelledJumps = [];
+            break FINDLABELLEDBLOCKS;
+          }
         }
         labelledBlocks[labelVal] = block;
       }
@@ -2527,6 +2535,42 @@ function registerizeHarder(ast) {
             labelledBlocks = {};
             labelledJumps = [];
             break FINDLABELLEDBLOCKS;
+          }
+          // If the next block is not a straightforward check of 'label'
+          // then all bets are off.  This can happen due to e.g. outlining
+          // and is surprisingly hard work to detect - we have to look through
+          // empty intermediate blocks to find the relevant check.
+          var jExit = junctions[block.exit];
+          FINDNEXTBLOCK:
+          while (true) {
+            if (setSize(jExit.outblocks) !== 1) {
+              // Multiple next blocks, this can't be a labelled jump.
+              labelledBlocks = {};
+              labelledJumps = [];
+              break FINDLABELLEDBLOCKS;
+            }
+            for (var b in jExit.outblocks) {
+              var nextBlock = blocks[b];
+              if (nextBlock.nodes.length === 0) {
+                // An empty intermediate block, look through to the next one.
+                jExit = junctions[nextBlock.exit];
+                continue FINDNEXTBLOCK;
+              }
+              if (!('label' in nextBlock.use)) {
+                // The block does not check 'label'.
+                labelledBlocks = {};
+                labelledJumps = [];
+                break FINDLABELLEDBLOCKS;
+              }
+              for (var name in nextBlock.kill) {
+                // The block does something other than check 'label'.
+                labelledBlocks = {};
+                labelledJumps = [];
+                break FINDLABELLEDBLOCKS;
+              }
+              // Yes, this is a legitimate labelled jump.
+              break FINDNEXTBLOCK;
+            }
           }
           labelledJumps.push([finalNode[3][1], block]);
         } else { 
